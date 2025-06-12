@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Final, Iterable, List, Set
-
+import re
+import fnmatch
 from .result import Err, Ok, Result
 
 _DEFAULT_IGNORES: Final[Set[str]] = {
@@ -14,7 +15,10 @@ _DEFAULT_IGNORES: Final[Set[str]] = {
     "__pycache__",
 }
 
-DEFAULT_IGNORES: Final[Set[str]] = _DEFAULT_IGNORES
+
+def default_ignore_tokens() -> Set[str]:
+    """Return a mutable copy of the built‑in ignore tokens."""
+    return set(_DEFAULT_IGNORES)
 
 
 def _gitignore_paths(root: Path) -> Set[str]:
@@ -34,23 +38,28 @@ def _gitignore_paths(root: Path) -> Set[str]:
     return patterns
 
 
-def get_ignore_tokens(root: Path) -> Set[str]:
-    """Return the set of ignore tokens for a given root directory (default + .gitignore)."""
-    return DEFAULT_IGNORES.union(_gitignore_paths(root))
+def get_ignore_tokens(root: Path, base_tokens: Iterable[str] | None = None) -> Set[Pattern]:
+    """Convert glob-style ignore tokens and .gitignore entries into compiled regex patterns."""
+    raw_tokens = set(base_tokens or _DEFAULT_IGNORES)
+    raw_tokens.update(_gitignore_paths(root))
+
+    regex_patterns = {re.compile(fnmatch.translate(token)) for token in raw_tokens}
+    return regex_patterns
 
 
-def should_ignore(path: Path, ignore_tokens: Set[str]) -> bool:
-    """Return True if the path should be ignored according to the ignore tokens."""
-    for token in ignore_tokens:
-        if token and token in path.parts:
+def should_ignore(path: Path, ignore_patterns: Iterable[str]) -> bool:
+    """Return True if the path matches any of the ignore regex patterns."""
+    normalized_path = str(path.as_posix())
+    for pattern in ignore_patterns:
+        if pattern.search(normalized_path):
             return True
-    # Ignore .pyc files
+    # Also ignore .pyc files
     if path.is_file() and path.name.endswith(".pyc"):
         return True
     return False
 
 
-def _ascii_tree(root: Path, ignore_tokens: Set[str]) -> str:
+def _ascii_tree(root: Path, ignore_tokens: Iterable[str]) -> str:
     """Return an ASCII‑art directory tree similar to the `tree` command."""
 
     lines: List[str] = []
@@ -76,9 +85,9 @@ def _ascii_tree(root: Path, ignore_tokens: Set[str]) -> str:
 # The port‑friendly façade
 
 
-def build_tree(root: Path) -> Result[str, str]:
+def build_tree(root: Path, ignore_tokens: Iterable[str] | None = None) -> Result[str, str]:
     if not root.exists():
         return Err(f"Directory not found: {root}")
-    ignore_tokens = get_ignore_tokens(root)
-    tree_repr = _ascii_tree(root, ignore_tokens)
+    tokens = get_ignore_tokens(root, ignore_tokens)
+    tree_repr = _ascii_tree(root, tokens)
     return Ok(tree_repr)

@@ -16,11 +16,13 @@ class ClipboardPort(Protocol):
 class DirectoryRepositoryPort(Protocol):
     """Read‑only access to a directory tree and its files (pure queries)."""
 
-    def build_tree(self) -> Result[str, str]: ...  # pragma: no cover
+    def build_tree(self,ignore_tokens : list[str]|None) -> Result[str, str]: ...  # pragma: no cover
 
     def read_file(
         self, relative_path: Path
     ) -> Result[str, str]: ...  # pragma: no cover
+
+    def set_ignore_tokens(self, tokens: list[str]) -> None: ...  # pragma: no cover
 
 
 class RulesRepositoryPort(Protocol):
@@ -37,3 +39,10 @@ class RecentRepositoryPort(Protocol):
     def save_paths(
         self, paths: list[Path]
     ) -> Result[None, str]: ...  # pragma: no cover
+
+
+class IgnoreRepositoryPort(Protocol):
+    """Port for persisting user ignore tokens."""
+
+    def load_tokens(self) -> Result[list[str], str]: ...  # pragma: no cover
+    def save_tokens(self, tokens: list[str]) -> Result[None, str]: ...  # pragma: no cover
